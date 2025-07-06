@@ -1,71 +1,91 @@
 import { useEffect, useState } from 'react';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 import { getTransactions } from '../services/transactionService';
-import { formatDate } from '../utils/formatDate'; // Import formatDate
+import { formatDate } from '../utils/formatDate';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   BarElement,
+  LineElement,
+  PointElement,
   Title,
   Tooltip,
   Legend,
 } from 'chart.js';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend);
 
 function Charts({ transactions }) {
-  const [chartData, setChartData] = useState({ labels: [], datasets: [] });
+  const [categoryChartData, setCategoryChartData] = useState({ labels: [], datasets: [] });
+  const [dateChartData, setDateChartData] = useState({ labels: [], datasets: [] });
 
   useEffect(() => {
     if (transactions && transactions.length > 0) {
-      const categories = [...new Set(transactions.map(t => t.category))];
-      const amounts = categories.map(cat =>
-        transactions
-          .filter(t => t.category === cat && t.type === 'expense')
-          .reduce((sum, t) => sum + t.amount, 0)
-      );
-      const dates = [...new Set(transactions.map(t => formatDate(t.date)))]; // Use formatDate
-      const dailyExpenses = dates.map(date =>
-        transactions
-          .filter(t => formatDate(t.date) === date && t.type === 'expense')
-          .reduce((sum, t) => sum + t.amount, 0)
-      );
+      // Prepare data for Expenses by Category (Bar Chart) with cap
+      const expensesByCategory = transactions
+        .filter(t => t.type === 'expense')
+        .map(t => ({ ...t, amount: Math.min(Math.abs(t.amount), 10000) * (t.amount < 0 ? -1 : 1) }))
+        .reduce((acc, t) => {
+          acc[t.category] = (acc[t.category] || 0) + t.amount;
+          return acc;
+        }, {});
+      const categoryLabels = Object.keys(expensesByCategory);
+      const categoryData = Object.values(expensesByCategory);
 
-      setChartData({
-        labels: ['By Category', 'By Date'],
-        datasets: [
-          {
-            label: 'Expenses by Category',
-            data: amounts,
-            backgroundColor: 'rgba(76, 81, 191, 0.6)',
-            borderColor: 'rgba(76, 81, 191, 1)',
-            borderWidth: 1,
-          },
-          {
-            label: 'Expenses by Date',
-            data: dailyExpenses,
-            backgroundColor: 'rgba(99, 179, 237, 0.6)',
-            borderColor: 'rgba(99, 179, 237, 1)',
-            borderWidth: 1,
-          },
-        ],
+      // Prepare data for Expenses by Date (Line Chart) with cap
+      const expensesByDate = transactions
+        .filter(t => t.type === 'expense')
+        .map(t => ({ ...t, amount: Math.min(Math.abs(t.amount), 10000) * (t.amount < 0 ? -1 : 1) }))
+        .reduce((acc, t) => {
+          const date = formatDate(t.date);
+          acc[date] = (acc[date] || 0) + t.amount;
+          return acc;
+        }, {});
+      const dateLabels = Object.keys(expensesByDate).sort();
+      const dateData = Object.values(expensesByDate);
+
+      setCategoryChartData({
+        labels: categoryLabels,
+        datasets: [{
+          label: 'Expenses by Category',
+          data: categoryData,
+          backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'],
+          borderColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'],
+          borderWidth: 1,
+        }],
+      });
+
+      setDateChartData({
+        labels: dateLabels,
+        datasets: [{
+          label: 'Expenses by Date',
+          data: dateData,
+          fill: false,
+          borderColor: '#FF6384',
+          tension: 0.1,
+        }],
       });
     }
   }, [transactions]);
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: { y: { beginAtZero: true, title: { display: true, text: 'Amount ($)' } } },
+    plugins: { legend: { position: 'top' }, title: { display: true, text: '' } },
+  };
 
   return (
     <div className="card">
       <h2 className="form-title">Expense Analysis</h2>
       <div style={{ height: '400px' }}>
-        <Bar
-          data={chartData}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: { x: { stacked: true }, y: { beginAtZero: true } },
-          }}
-        />
+        <h4>Expenses by Category</h4>
+        <Bar data={categoryChartData} options={{ ...chartOptions, plugins: { ...chartOptions.plugins, title: { text: 'Expenses by Category' } } }} />
+      </div>
+      <div style={{ height: '400px', marginTop: '20px' }}>
+        <h4>Expenses by Date</h4>
+        <Line data={dateChartData} options={{ ...chartOptions, scales: { ...chartOptions.scales, x: { title: { display: true, text: 'Date' } } }, plugins: { ...chartOptions.plugins, title: { text: 'Expenses by Date' } } }} />
       </div>
     </div>
   );

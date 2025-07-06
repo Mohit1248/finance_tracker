@@ -1,24 +1,37 @@
 const Transaction = require('../models/Transaction');
-
 exports.getTransactions = async (req, res) => {
-  console.log('transactionController.js: Handling GET /transactions for userId:', req.user?.id);
   try {
     const userId = req.user.id;
-    const { page = 1, limit = 10, startDate, endDate } = req.query;
+
+    // Parse page and limit from query params, with defaults
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
-    const query = { user: userId }; // Changed from userId to user
+
+    const { startDate, endDate } = req.query;
+    const query = { user: userId };
+
     if (startDate && endDate) {
       query.date = { $gte: new Date(startDate), $lte: new Date(endDate) };
     }
+
     const transactions = await Transaction.find(query)
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(limit);
+
     const total = await Transaction.countDocuments(query);
-    console.log('transactionController.js: Fetched transactions, page:', page, 'limit:', limit, 'total:', total);
-    res.json({ transactions, total, page, limit });
+    const pages = Math.ceil(total / limit);
+
+    res.json({
+      transactions,
+      total,
+      page,
+      limit,
+      pages,
+    });
   } catch (error) {
-    console.error('transactionController.js: Get transactions error:', error);
-    res.status(500).json({ message: 'Error fetching transactions' });
+    console.error('Get transactions error:', error);
+    res.status(500).json({ message: 'Error fetching transactions', error: error.message });
   }
 };
 
@@ -29,23 +42,28 @@ exports.createTransaction = async (req, res) => {
     const transaction = new Transaction({ ...req.body, user: userId });
     await transaction.save();
     console.log('transactionController.js: Transaction created:', transaction);
-    res.status(201).json(transaction);
+    res.status(201).json({ message: 'Transaction created', transaction });
   } catch (error) {
     console.error('transactionController.js: Create transaction error:', error);
-    res.status(500).json({ message: 'Error creating transaction', error: error.message });
+    res.status(400).json({ message: 'Error creating transaction', error: error.message, details: error.errors ? Object.values(error.errors).map(e => e.message) : null });
   }
 };
 
 exports.getTransactionSummary = async (req, res) => {
   try {
     const userId = req.user.id;
+    const { startDate, endDate } = req.query;
+    const query = { user: userId };
+    if (startDate && endDate) {
+      query.date = { $gte: new Date(startDate), $lte: new Date(endDate) };
+    }
     const summary = {
       byCategory: await Transaction.aggregate([
-        { $match: { user: userId } },
+        { $match: query },
         { $group: { _id: '$category', total: { $sum: '$amount' } } },
       ]),
       byDate: await Transaction.aggregate([
-        { $match: { user: userId } },
+        { $match: query },
         {
           $group: {
             _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
@@ -58,6 +76,6 @@ exports.getTransactionSummary = async (req, res) => {
     res.json(summary);
   } catch (error) {
     console.error('transactionController.js: Summary error:', error);
-    res.status(500).json({ message: 'Error generating summary' });
+    res.status(500).json({ message: 'Error generating summary', error: error.message });
   }
 };
