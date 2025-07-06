@@ -1,9 +1,11 @@
 const express = require('express');
-const router = express.Router();
+const { getTransactions, createTransaction, getTransactionSummary } = require('../controllers/transactionController');
 const authMiddleware = require('../middlewares/authMiddleware');
-const transactionController = require('../controllers/transactionController');
+const router = express.Router();
 
-router.post('/', authMiddleware, transactionController.createTransaction);
-router.get('/', authMiddleware, transactionController.getTransactions);
+console.log('transactionRoutes.js: Setting up /transactions routes');
+router.get('/transactions', authMiddleware, getTransactions);
+router.post('/transactions', authMiddleware, createTransaction);
+router.get('/summary', authMiddleware, getTransactionSummary);
 
 module.exports = router;
