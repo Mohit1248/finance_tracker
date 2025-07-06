@@ -11,15 +11,16 @@ function FileUpload({ onUpload }) {
       setError('Please select a file.');
       return;
     }
-    const formData = new FormData();
-    formData.append('file', file);
     try {
-      const result = await uploadReceipt(formData);
-      onUpload(result);
+      console.log('FileUpload.jsx: Submitting file:', file.name);
+      const result = await uploadReceipt(file);
+      console.log('FileUpload.jsx: Upload result:', result);
+      onUpload(result.transaction);
       setFile(null);
       setError('');
     } catch (err) {
-      setError(err.response?.data?.message || 'Error uploading file');
+      console.error('FileUpload.jsx: Upload failed:', err);
+      setError(err.response?.data?.message || 'Error uploading file: ' + err.message);
     }
   };
 
@@ -37,9 +38,7 @@ function FileUpload({ onUpload }) {
           />
         </div>
         {error && <p className="error">{error}</p>}
-        <button type="submit" className="submit-button">
-          Upload
-        </button>
+        <button type="submit" className="submit-button">Upload</button>
       </form>
     </div>
   );
